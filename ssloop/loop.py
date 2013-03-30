@@ -24,9 +24,9 @@ def init():
     if 'epoll' in select.__all__:
         import impl.epoll_loop
         _ssloop_cls = impl.epoll_loop.EpollLoop
-    elif 'kqueue' in select._all__:
-        import impl.kqueue_loop
-        _ssloop_cls = impl.kqueue_loop.KqueueLoop
+    #elif 'kqueue' in select._all__:
+    #    import impl.kqueue_loop
+    #    _ssloop_cls = impl.kqueue_loop.KqueueLoop
     else:
         import impl.select_loop
         _ssloop_cls = impl.select_loop.SelectLoop
@@ -60,14 +60,14 @@ class SSLoop(object):
         self._handlers_with_no_fd = []
         # [handle1, handle2, ...]
 
-        self._handlers_with_fd = []
-        # [handle1, handle2, ...]
-
         self._handlers_with_timeout = []
         # [handle1, handle2, ...]
 
         self._stopped = False
+
         self._fd_to_handler = {}
+        # {'fd1':[handler, handler, ...], 'fd2':[handler, handler, ...]}
+
         self._on_error = None
 
     def time(self):
@@ -75,6 +75,15 @@ class SSLoop(object):
 
     def _poll(self, timeout):
         '''timeout here is timespan, -1 means forever'''
+        raise NotImplementedError()
+
+    def _add_fd(self, fd, mode):
+        raise NotImplementedError()
+
+    def _modify_fd(self, fd, mode):
+        raise NotImplementedError()
+
+    def _remove_fd(self, fd):
         raise NotImplementedError()
 
     def _call_handler(self, handler):
@@ -85,6 +94,20 @@ class SSLoop(object):
                 self._on_error(sys.exc_info())
             else:
                 sys.print_exc()
+
+    def _get_fd_mode(self, fd):
+        mode = MODE_NULL
+        handlers = self._fd_to_handler[fd]
+        if handlers is None:
+            return None
+        for handler in handlers:
+            mode &= handler.mode
+        return mode
+
+    def _update_fd(self, fd):
+        mode = self._get_fd_mode(fd)
+        if mode is not None:
+            self._modify_fd(fd, mode)
 
     def start(self):
         self._stopped = False
@@ -134,13 +157,27 @@ class SSLoop(object):
 
     def add_fd(self, fd, mode, callback):
         handler = Handler(callback, fd=fd, mode=mode)
-        self._handers_with_fd.append(handler)
+        if fd not in self._fd_to_handler:
+            l = []
+            self._fd_to_handler[fd] = l
+            self._add_fd(fd, mode)
+        else:
+            l = self._fd_to_handler[fd]
+            self._update_fd(fd)
+        l.append(handler)
         return handler
 
     def remove_handler(self, handler):
+        # TODO: handle exceptions friendly
         if handler.timeout:
             self._handlers_with_timeout.remove(handler)
         elif handler.fd:
-            self._handlers_with_fd.remove(handler)
+            fd = handler.fd
+            l = self._fd_to_handler
+            l.remove(handler)
+            if len(l) == 0:
+                self._remove_fd(fd)
+            else:
+                self._update_fd(fd)
         else:
             self._handlers_with_no_fd.remove(handler)
