@@ -3,7 +3,11 @@
 import select
 import time
 import heapq
+from collections import defaultdict
 import sys
+
+
+''' You can only use instance(). Don't create a Loop() '''
 
 _ssloop_cls = None
 _ssloop = None
@@ -33,12 +37,13 @@ def init():
 
 init()
 
-MODE_NULL = 0
-MODE_IN = 1
-MODE_OUT = 2
-MODE_ERR = 4
-MODE_HUP = 8
-MODE_NVAL = 16
+# these values are defined as the same as poll
+MODE_NULL = 0x00
+MODE_IN = 0x01
+MODE_OUT = 0x04
+MODE_ERR = 0x08
+MODE_HUP = 0x10
+MODE_NVAL = 0x20
 
 
 class Handler(object):
@@ -65,7 +70,7 @@ class SSLoop(object):
 
         self._stopped = False
 
-        self._fd_to_handler = {}
+        self._fd_to_handler = defaultdict(list)
         # {'fd1':[handler, handler, ...], 'fd2':[handler, handler, ...]}
 
         self._on_error = None
@@ -80,10 +85,10 @@ class SSLoop(object):
     def _add_fd(self, fd, mode):
         raise NotImplementedError()
 
-    def _modify_fd(self, fd, mode):
+    def _remove_fd(self, fd):
         raise NotImplementedError()
 
-    def _remove_fd(self, fd):
+    def _modify_fd(self, fd, mode):
         raise NotImplementedError()
 
     def _call_handler(self, handler):
@@ -157,14 +162,12 @@ class SSLoop(object):
 
     def add_fd(self, fd, mode, callback):
         handler = Handler(callback, fd=fd, mode=mode)
-        if fd not in self._fd_to_handler:
-            l = []
-            self._fd_to_handler[fd] = l
+        l = self._fd_to_handler[fd]
+        l.append(handler)
+        if len(l) == 0:
             self._add_fd(fd, mode)
         else:
-            l = self._fd_to_handler[fd]
             self._update_fd(fd)
-        l.append(handler)
         return handler
 
     def remove_handler(self, handler):
@@ -174,6 +177,7 @@ class SSLoop(object):
         elif handler.fd:
             fd = handler.fd
             l = self._fd_to_handler
+            # TODO: handle exceptions friendly
             l.remove(handler)
             if len(l) == 0:
                 self._remove_fd(fd)
