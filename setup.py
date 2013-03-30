@@ -7,7 +7,7 @@ setup(
     version='0.0.1',
     packages=['ssloop'],
     package_data={
-        'ssloopp': ['README.md'],
+        'ssloop': ['README.md'],
     },
     install_requires=[],
     author='clowwindy',
