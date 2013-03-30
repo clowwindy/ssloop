@@ -14,5 +14,5 @@ setup(
     author_email='clowwindy42@gmail.com',
     url='http://github.com/clowwindy/ssloop',
     license='MIT',
-    description='simple nonblocking socket event loop'
+    description='super lightweight event loop'
 )
