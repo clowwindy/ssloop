@@ -20,7 +20,7 @@ class SelectLoop(SSLoop):
         for p in [(r, SSLoop.MODE_IN), (w, SSLoop.MODE_OUT), (x, SSLoop.MODE_ERR)]:
             for fd in p[0]:
                 results[fd] &= p[1]
-        return results
+        return results.items()
 
     def _add_fd(self, fd, mode):
         if mode & SSLoop.MODE_IN:

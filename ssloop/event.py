@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import logging
 from collections import defaultdict
 
 
@@ -32,6 +33,12 @@ class EventEmitter(object):
 
     def emit(self, event_name, *args, **kwargs):
         for cb in self._events[event_name]:
-            cb(*args, **kwargs)
+            try:
+                cb(*args, **kwargs)
+            except:
+                logging.exception('error when calling callback')
         for cb in self._events_once[event_name]:
-            cb(*args, **kwargs)
+            try:
+                cb(*args, **kwargs)
+            except:
+                logging.exception('error when calling callback')

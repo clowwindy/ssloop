@@ -142,9 +142,12 @@ class SSLoop(object):
                 timeout = 0
 
             # poll handlers with fd
-            handlers_ready = self._poll(0)
-            for handler in handlers_ready:
-                self._call_handler(handler)
+            fds_ready = self._poll(0)
+            for fd, mode in fds_ready:
+                handlers = self._fd_to_handler
+                for handler in handlers:
+                    if handler.mode & mode != 0:
+                        self._call_handler(handler)
 
     def stop(self):
         self._stopped = True
@@ -169,6 +172,10 @@ class SSLoop(object):
         else:
             self._update_fd(fd)
         return handler
+
+    def update_fd(self, handler, mode):
+        handler.mode = mode
+        self._update_fd(handler.fd)
 
     def remove_handler(self, handler):
         # TODO: handle exceptions friendly
