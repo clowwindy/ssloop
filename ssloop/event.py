@@ -12,7 +12,6 @@ class EventEmitter(object):
 
     def on(self, event_name, callback):
         self._events[event_name].append(callback)
-        self._events_once[event_name].append(callback)
 
     def once(self, event_name, callback):
         self._events_once[event_name].append(callback)

@@ -116,7 +116,6 @@ class Socket(event.EventEmitter):
 
     def _write(self):
         # called internally
-        print self._state
         assert self._state == STATE_STREAMING
         buf = self._buffers
         while len(buf) > 0:
