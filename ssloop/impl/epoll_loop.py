@@ -8,7 +8,7 @@ from ssloop.loop import SSLoop
 class EpollLoop(SSLoop):
 
     def __init__(self):
-        super(EpollLoop).__init__(self)
+        super(EpollLoop, self).__init__()
         self._epoll = select.epoll()
 
     def _poll(self, timeout):

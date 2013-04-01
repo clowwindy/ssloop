@@ -5,6 +5,7 @@ import time
 import heapq
 from collections import defaultdict
 import sys
+import traceback
 
 
 ''' You can only use instance(). Don't create a Loop() '''
@@ -18,6 +19,7 @@ def instance():
     if _ssloop is not None:
         return _ssloop
     else:
+        init()
         _ssloop = _ssloop_cls()
         return _ssloop
 
@@ -25,17 +27,16 @@ def instance():
 def init():
     global _ssloop_cls
 
-    if 'epoll' in select.__all__:
+    if 'epoll' in select.__dict__:
         import impl.epoll_loop
         _ssloop_cls = impl.epoll_loop.EpollLoop
-    #elif 'kqueue' in select._all__:
+    #elif 'kqueue' in select._dict__:
     #    import impl.kqueue_loop
     #    _ssloop_cls = impl.kqueue_loop.KqueueLoop
     else:
         import impl.select_loop
         _ssloop_cls = impl.select_loop.SelectLoop
 
-init()
 
 # these values are defined as the same as poll
 MODE_NULL = 0x00
@@ -98,7 +99,7 @@ class SSLoop(object):
             if self._on_error is not None:
                 self._on_error(sys.exc_info())
             else:
-                sys.print_exc()
+                traceback.print_exc()
 
     def _get_fd_mode(self, fd):
         mode = MODE_NULL
@@ -106,7 +107,7 @@ class SSLoop(object):
         if handlers is None:
             return None
         for handler in handlers:
-            mode &= handler.mode
+            mode |= handler.mode
         return mode
 
     def _update_fd(self, fd):
@@ -117,6 +118,8 @@ class SSLoop(object):
     def start(self):
         self._stopped = False
         while not self._stopped:
+            # TODO make a copy of these handlers before iterating on them
+
             # call handlers timed out
             # notice that handlers with timeout are called first than handlers without fd
             cur_time = self.time()
@@ -137,14 +140,16 @@ class SSLoop(object):
             cur_time = self.time()
             if len(self._handlers_with_timeout) > 0:
                 next_deadline = self._handlers_with_timeout[0].deadline
-            timeout = next_deadline - cur_time
-            if timeout < 0:
+                timeout = next_deadline - cur_time
+                if timeout < 0:
+                    timeout = 0
+            else:
                 timeout = 0
 
             # poll handlers with fd
             fds_ready = self._poll(0)
             for fd, mode in fds_ready:
-                handlers = self._fd_to_handler
+                handlers = self._fd_to_handler[fd]
                 for handler in handlers:
                     if handler.mode & mode != 0:
                         self._call_handler(handler)
@@ -167,7 +172,7 @@ class SSLoop(object):
         handler = Handler(callback, fd=fd, mode=mode)
         l = self._fd_to_handler[fd]
         l.append(handler)
-        if len(l) == 0:
+        if len(l) == 1:
             self._add_fd(fd, mode)
         else:
             self._update_fd(fd)
@@ -179,15 +184,16 @@ class SSLoop(object):
 
     def remove_handler(self, handler):
         # TODO: handle exceptions friendly
-        if handler.timeout:
+        if handler.deadline:
             self._handlers_with_timeout.remove(handler)
         elif handler.fd:
             fd = handler.fd
-            l = self._fd_to_handler
+            l = self._fd_to_handler[fd]
             # TODO: handle exceptions friendly
             l.remove(handler)
             if len(l) == 0:
                 self._remove_fd(fd)
+                del self._fd_to_handler[fd]
             else:
                 self._update_fd(fd)
         else:

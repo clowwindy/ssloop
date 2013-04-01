@@ -3,6 +3,7 @@
 import socket
 import event
 import loop
+from loop import instance
 import logging
 import collections
 import errno
@@ -18,9 +19,9 @@ RECV_BUFSIZE = 4096
 class Socket(event.EventEmitter):
     ''' currently TCP, IPv4 only'''
 
-    def __init__(self, loop):
-        super(Socket).__init__()
-        self._loop = loop
+    def __init__(self, loop=None):
+        super(Socket, self).__init__()
+        self._loop = loop if loop is not None else instance()
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         self._socket.setblocking(False)
         self._buffers = collections.deque()
@@ -53,19 +54,27 @@ class Socket(event.EventEmitter):
         self.close()
 
     def _connect_cb(self):
+        logging.debug('_connect_cb')
         assert self._state == STATE_CONNECTING
-        self.emit('connect', self)
         self._loop.remove_handler(self._connect_handler)
-        self._read_handler = self._loop.add(self._socket, loop.MODE_IN, self._read_cb)
         self._connect_handler = None
-        self._state == STATE_STREAMING
+        self._read_handler = self._loop.add_fd(self._socket, loop.MODE_IN, self._read_cb)
+        self._state = STATE_STREAMING
+        self.emit('connect', self)
 
     def connect(self, address):
         assert self._state == STATE_INITIALIZED
-        self._socket.connect(address)
-        self._connect_handler = self._loop.add(self._socket, loop.MODE_OUT, self._connect_cb)
+        try:
+            self._socket.connect(address)
+        except socket.error as e:
+            if e.args[0] not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
+                self._error(e)
+                return
+        self._connect_handler = self._loop.add_fd(self._socket, loop.MODE_OUT, self._connect_cb)
+        self._state = STATE_CONNECTING
 
     def _read_cb(self):
+        logging.debug('_read_cb')
         assert self._state == STATE_STREAMING
         self._read()
 
@@ -74,7 +83,7 @@ class Socket(event.EventEmitter):
         ended = False
         while True:
             try:
-                data = socket.recv(RECV_BUFSIZE)
+                data = self._socket.recv(RECV_BUFSIZE)
                 if not data:
                     # received FIN
                     ended = True
@@ -96,6 +105,8 @@ class Socket(event.EventEmitter):
             self.close()
 
     def _write_cb(self):
+        logging.debug('_write_cb')
+        assert self._state == STATE_STREAMING
         # called when writable
         if len(self._buffers) > 0:
             self._write()
@@ -105,18 +116,19 @@ class Socket(event.EventEmitter):
 
     def _write(self):
         # called internally
+        print self._state
         assert self._state == STATE_STREAMING
         buf = self._buffers
         while len(buf) > 0:
             data = buf.popleft()
             try:
-                r = socket.send(data)
+                r = self._socket.send(data)
                 if r < len(data):
                     buf.appendleft(data[r:])
                     return
             except socket.error as e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
-                    self._write_handler = self._loop.add(self._socket, loop.MODE_OUT, self._write_cb)
+                    self._write_handler = self._loop.add_fd(self._socket, loop.MODE_OUT, self._write_cb)
                     return
                 else:
                     self._error(e)
@@ -129,7 +141,7 @@ class Socket(event.EventEmitter):
         # TODO make stream writable in STATE_CONNECTING
         self._buffers.append(data)
         if not self._write_handler:
-            self._write_handler = self._loop.add(self._socket, loop.MODE_OUT, self._write_cb)
+            self._write_handler = self._loop.add_fd(self._socket, loop.MODE_OUT, self._write_cb)
         self._write()
 
 
