@@ -173,7 +173,7 @@ class SSLoop(object):
             self._update_fd(fd)
         return handler
 
-    def update_fd(self, handler, mode):
+    def update_handler_mode(self, handler, mode):
         handler.mode = mode
         self._update_fd(handler.fd)
 
