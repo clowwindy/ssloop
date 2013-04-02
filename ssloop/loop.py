@@ -30,12 +30,15 @@ def init():
 
     if 'epoll' in select.__dict__:
         import impl.epoll_loop
+        logging.debug('using epoll')
         _ssloop_cls = impl.epoll_loop.EpollLoop
     elif 'kqueue' in select.__dict__:
         import impl.kqueue_loop
+        logging.debug('using kqueue')
         _ssloop_cls = impl.kqueue_loop.KqueueLoop
     else:
         import impl.select_loop
+        logging.debug('using select')
         _ssloop_cls = impl.select_loop.SelectLoop
 
 
