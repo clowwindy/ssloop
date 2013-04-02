@@ -3,6 +3,7 @@
 import select
 import time
 import heapq
+import logging
 from collections import defaultdict
 import sys
 import traceback
@@ -57,7 +58,12 @@ class Handler(object):
         self.error = None  # a message describing the error
 
     def __cmp__(self, other):
-        return self.deadline - other.deadline
+        r = self.deadline - other.deadline
+        if r != 0:
+            return r
+        else:
+            # We don't want to make lists think 2 handlers are equal
+            return id(self) - id(other)
 
 
 class SSLoop(object):
@@ -152,6 +158,7 @@ class SSLoop(object):
                 handlers = self._fd_to_handler[fd]
                 for handler in handlers:
                     if handler.mode & mode != 0:
+                        logging.debug('calling %s' % handler)
                         self._call_handler(handler)
 
     def stop(self):

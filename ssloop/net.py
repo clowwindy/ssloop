@@ -35,13 +35,13 @@ class Socket(event.EventEmitter):
     def close(self):
         if self._state in (STATE_INITIALIZED, STATE_CONNECTING, STATE_STREAMING):
             # TODO remove handlers
-            if self._stage == STATE_CONNECTING:
-                self._loop.remove(self._connect_cb)
-            elif self._stage == STATE_STREAMING:
+            if self._state == STATE_CONNECTING:
+                self._loop.remove_handler(self._connect_cb)
+            elif self._state == STATE_STREAMING:
                 if self._read_handler:
-                    self._loop.remote(self._read_handler)
+                    self._loop.remove_handler(self._read_handler)
                 if self._write_handler:
-                    self._loop.remove(self._write_handler)
+                    self._loop.remove_handler(self._write_handler)
 
             self._socket.close()
             self._state = STATE_CLOSED
@@ -63,6 +63,7 @@ class Socket(event.EventEmitter):
         self.emit('connect', self)
 
     def connect(self, address):
+        logging.debug('connect')
         assert self._state == STATE_INITIALIZED
         try:
             self._socket.connect(address)
@@ -79,6 +80,7 @@ class Socket(event.EventEmitter):
         self._read()
 
     def _read(self):
+        logging.debug('_read')
         cache = []
         ended = False
         while True:
@@ -88,6 +90,7 @@ class Socket(event.EventEmitter):
                     # received FIN
                     ended = True
                     break
+                cache.append(data)
             except socket.error as e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     break
@@ -101,7 +104,7 @@ class Socket(event.EventEmitter):
                 self.emit('data', self, data)
 
         if ended:
-            self.emit('end')
+            self.emit('end', self)
             self.close()
 
     def _write_cb(self):
@@ -111,10 +114,12 @@ class Socket(event.EventEmitter):
         if len(self._buffers) > 0:
             self._write()
         else:
+            logging.debug('removing write handler %s' % self._write_handler)
             self._loop.remove_handler(self._write_handler)
             self._write_handler = None
 
     def _write(self):
+        logging.debug('_write')
         # called internally
         assert self._state == STATE_STREAMING
         buf = self._buffers
@@ -124,15 +129,18 @@ class Socket(event.EventEmitter):
                 r = self._socket.send(data)
                 if r < len(data):
                     buf.appendleft(data[r:])
+                    logging.debug('r < data')
                     return
             except socket.error as e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
                     self._write_handler = self._loop.add_fd(self._socket, loop.MODE_OUT, self._write_cb)
+                    logging.debug(e)
                     return
                 else:
                     self._error(e)
                     return
         # if all written, we don't need to handle OUT event
+        logging.debug('removing write handler %s' % self._write_handler)
         self._loop.remove_handler(self._write_handler)
         self._write_handler = None
 
