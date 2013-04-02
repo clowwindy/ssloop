@@ -5,7 +5,7 @@ from setuptools import setup
 setup(
     name='ssloop',
     version='0.0.2',
-    packages=['ssloop'],
+    packages=['ssloop', 'ssloop.impl'],
     package_data={
         'ssloop': ['README.md'],
     },
@@ -18,7 +18,8 @@ setup(
     long_description=''' super simple event loop
 ========================
 ssloop is a super simple eventloop
-example:
+
+example::
 
     import sys
     import ssloop
@@ -31,7 +32,7 @@ example:
 
     def on_connect(s):
         print 'on_connect'
-        s.write('GET / HTTP/1.0\r\nHost: www.google.com\r\nConnection: Close\r\n\r\n')
+        s.write('GET / HTTP/1.0\\r\\nHost: www.google.com\\r\\nConnection: Close\\r\\n\\r\\n')
 
 
     def on_data(s, data):
