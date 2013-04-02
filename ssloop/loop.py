@@ -31,9 +31,9 @@ def init():
     if 'epoll' in select.__dict__:
         import impl.epoll_loop
         _ssloop_cls = impl.epoll_loop.EpollLoop
-    #elif 'kqueue' in select._dict__:
-    #    import impl.kqueue_loop
-    #    _ssloop_cls = impl.kqueue_loop.KqueueLoop
+    elif 'kqueue' in select.__dict__:
+        import impl.kqueue_loop
+        _ssloop_cls = impl.kqueue_loop.KqueueLoop
     else:
         import impl.select_loop
         _ssloop_cls = impl.select_loop.SelectLoop
@@ -150,10 +150,10 @@ class SSLoop(object):
                 if timeout < 0:
                     timeout = 0
             else:
-                timeout = 0
+                timeout = -1
 
             # poll handlers with fd
-            fds_ready = self._poll(0)
+            fds_ready = self._poll(timeout)
             for fd, mode in fds_ready:
                 handlers = self._fd_to_handler[fd]
                 for handler in handlers:
@@ -176,6 +176,8 @@ class SSLoop(object):
         return handler
 
     def add_fd(self, fd, mode, callback):
+        if not isinstance(fd, int):
+            fd = fd.fileno()
         handler = Handler(callback, fd=fd, mode=mode)
         l = self._fd_to_handler[fd]
         l.append(handler)
@@ -195,6 +197,8 @@ class SSLoop(object):
             self._handlers_with_timeout.remove(handler)
         elif handler.fd:
             fd = handler.fd
+            if not isinstance(fd, int):
+                fd = fd.fileno()
             l = self._fd_to_handler[fd]
             # TODO: handle exceptions friendly
             l.remove(handler)
