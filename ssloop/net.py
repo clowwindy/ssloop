@@ -40,12 +40,23 @@ class Socket(event.EventEmitter):
     def __del__(self):
         self.close()
 
+    def end(self):
+        assert self._state in (STATE_INITIALIZED, STATE_CONNECTING, STATE_STREAMING)
+        if self._state in (STATE_INITIALIZED, STATE_CONNECTING):
+            self.close()
+        else:
+            if self._buffers:
+                logging.debug('wait for writing before closing')
+                self._state = STATE_CLOSING
+            else:
+                self.close()
+
     def close(self):
-        if self._state in (STATE_INITIALIZED, STATE_CONNECTING, STATE_STREAMING):
+        if self._state in (STATE_INITIALIZED, STATE_CONNECTING, STATE_STREAMING, STATE_CLOSING):
             # TODO remove handlers
             if self._state == STATE_CONNECTING:
                 self._loop.remove_handler(self._connect_cb)
-            elif self._state == STATE_STREAMING:
+            elif self._state == STATE_STREAMING or self._state == STATE_CLOSING:
                 if self._read_handler:
                     self._loop.remove_handler(self._read_handler)
                 if self._write_handler:
@@ -55,6 +66,8 @@ class Socket(event.EventEmitter):
             self._state = STATE_CLOSED
             self.emit('close', self)
         else:
+            import traceback
+            traceback.print_stack()
             logging.warn('closing a closed socket')
 
     def _error(self, error):
@@ -117,11 +130,12 @@ class Socket(event.EventEmitter):
 
         if ended:
             self.emit('end', self)
-            self.close()
+            if self._state == STATE_STREAMING:
+                self.close()
 
     def _write_cb(self):
         logging.debug('_write_cb')
-        assert self._state == STATE_STREAMING
+        assert self._state in (STATE_STREAMING, STATE_CLOSING)
         # called when writable
         if len(self._buffers) > 0:
             self._write()
@@ -129,11 +143,13 @@ class Socket(event.EventEmitter):
             logging.debug('removing write handler %s' % self._write_handler)
             self._loop.remove_handler(self._write_handler)
             self._write_handler = None
+            if self._state == STATE_CLOSING:
+                self.close()
 
     def _write(self):
         logging.debug('_write')
         # called internally
-        assert self._state == STATE_STREAMING
+        assert self._state in (STATE_STREAMING, STATE_CLOSING)
         buf = self._buffers
         while len(buf) > 0:
             data = buf.popleft()
@@ -155,6 +171,8 @@ class Socket(event.EventEmitter):
         logging.debug('removing write handler %s' % self._write_handler)
         self._loop.remove_handler(self._write_handler)
         self._write_handler = None
+        if self._state == STATE_CLOSING:
+            self.close()
 
     def write(self, data):
         # TODO make stream writable in STATE_CONNECTING
