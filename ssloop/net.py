@@ -2,7 +2,7 @@
 
 import socket
 import event
-import loop
+import loop as loop_
 from loop import instance
 import logging
 import collections
@@ -12,6 +12,8 @@ STATE_CLOSED = 0
 STATE_INITIALIZED = 1
 STATE_CONNECTING = 2
 STATE_STREAMING = 4
+STATE_LISTENING = 8
+STATE_CLOSING = 16  # half close, write only
 
 RECV_BUFSIZE = 4096
 
@@ -19,16 +21,22 @@ RECV_BUFSIZE = 4096
 class Socket(event.EventEmitter):
     ''' currently TCP, IPv4 only'''
 
-    def __init__(self, loop=None):
+    def __init__(self, loop=None, sock=None):
         super(Socket, self).__init__()
         self._loop = loop if loop is not None else instance()
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        self._socket.setblocking(False)
         self._buffers = collections.deque()
         self._state = STATE_INITIALIZED
         self._connect_handler = None
         self._write_handler = None
 
+        if sock is None:
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+            self._socket.setblocking(False)
+        else:
+            # initialize using existing socket
+            self._socket = sock
+            self._init_streaming()
+        
     def __del__(self):
         self.close()
 
@@ -58,9 +66,13 @@ class Socket(event.EventEmitter):
         assert self._state == STATE_CONNECTING
         self._loop.remove_handler(self._connect_handler)
         self._connect_handler = None
-        self._read_handler = self._loop.add_fd(self._socket, loop.MODE_IN, self._read_cb)
-        self._state = STATE_STREAMING
+        self._init_streaming()
         self.emit('connect', self)
+
+    def _init_streaming(self):
+        logging.debug('init streaming')
+        self._state = STATE_STREAMING
+        self._read_handler = self._loop.add_fd(self._socket, loop_.MODE_IN, self._read_cb)
 
     def connect(self, address):
         logging.debug('connect')
@@ -71,7 +83,7 @@ class Socket(event.EventEmitter):
             if e.args[0] not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
                 self._error(e)
                 return
-        self._connect_handler = self._loop.add_fd(self._socket, loop.MODE_OUT, self._connect_cb)
+        self._connect_handler = self._loop.add_fd(self._socket, loop_.MODE_OUT, self._connect_cb)
         self._state = STATE_CONNECTING
 
     def _read_cb(self):
@@ -133,7 +145,7 @@ class Socket(event.EventEmitter):
                     return
             except socket.error as e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
-                    self._write_handler = self._loop.add_fd(self._socket, loop.MODE_OUT, self._write_cb)
+                    self._write_handler = self._loop.add_fd(self._socket, loop_.MODE_OUT, self._write_cb)
                     logging.debug(e)
                     return
                 else:
@@ -148,7 +160,48 @@ class Socket(event.EventEmitter):
         # TODO make stream writable in STATE_CONNECTING
         self._buffers.append(data)
         if not self._write_handler:
-            self._write_handler = self._loop.add_fd(self._socket, loop.MODE_OUT, self._write_cb)
+            self._write_handler = self._loop.add_fd(self._socket, loop_.MODE_OUT, self._write_cb)
         self._write()
 
 
+class Server(event.EventEmitter):
+    ''' currently TCP, IPv4 only'''
+    def __init__(self, address, loop=None):
+        super(Server, self).__init__()
+        self._address = address
+        self._loop = loop if loop is not None else instance()
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        self._socket.setblocking(False)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._socket.bind(address)
+        self._state = STATE_INITIALIZED
+
+    def __del__(self):
+        self.close()
+
+    def listen(self, backlog=128):
+        assert self._state == STATE_INITIALIZED
+        self._accept_handler = self._loop.add_fd(self._socket, loop_.MODE_IN, self._accept_cb)
+        self._socket.listen(backlog)
+        self._state = STATE_LISTENING
+
+    def _accept_cb(self):
+        assert self._state == STATE_LISTENING
+        logging.debug('accept_cb')
+        conn, addr = self._socket.accept()
+        sockobj = Socket(loop=self._loop, sock=conn)
+        self.emit('connection', self, sockobj)
+
+    def close(self):
+        logging.debug('close server')
+        if self._state in (STATE_INITIALIZED, STATE_LISTENING):
+            if self._accept_handler:
+                self._loop.remove_handler(self._accept_handler)
+            self._socket.close()
+            self._state = STATE_CLOSED
+            self.emit('close', self)
+        else:
+            logging.warn('closing a closed server')
+
+ 
+ 

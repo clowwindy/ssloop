@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='ssloop',
-    version='0.0.2',
+    version='0.0.3',
     packages=['ssloop', 'ssloop.impl'],
     package_data={
         'ssloop': ['README.md'],
