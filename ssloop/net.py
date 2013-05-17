@@ -35,8 +35,9 @@ class Socket(event.EventEmitter):
         else:
             # initialize using existing socket
             self._socket = sock
+            sock.setblocking(False)
             self._init_streaming()
-        
+
     def __del__(self):
         self.close()
 
@@ -220,6 +221,3 @@ class Server(event.EventEmitter):
             self.emit('close', self)
         else:
             logging.warn('closing a closed server')
-
- 
- 
