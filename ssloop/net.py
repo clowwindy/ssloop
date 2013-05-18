@@ -56,7 +56,7 @@ class Socket(event.EventEmitter):
         if self._state in (STATE_INITIALIZED, STATE_CONNECTING, STATE_STREAMING, STATE_CLOSING):
             # TODO remove handlers
             if self._state == STATE_CONNECTING:
-                self._loop.remove_handler(self._connect_cb)
+                self._loop.remove_handler(self._connect_handler)
             elif self._state == STATE_STREAMING or self._state == STATE_CLOSING:
                 if self._read_handler:
                     self._loop.remove_handler(self._read_handler)
