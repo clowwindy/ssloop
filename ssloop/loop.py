@@ -179,7 +179,7 @@ class SSLoop(object):
         return handler
 
     def add_fd(self, fd, mode, callback):
-        if not isinstance(fd, int):
+        if not (isinstance(fd, int) or isinstance(fd, long)):
             fd = fd.fileno()
         handler = Handler(callback, fd=fd, mode=mode)
         l = self._fd_to_handler[fd]
@@ -200,7 +200,7 @@ class SSLoop(object):
             self._handlers_with_timeout.remove(handler)
         elif handler.fd:
             fd = handler.fd
-            if not isinstance(fd, int):
+            if not (isinstance(fd, int) or isinstance(fd, long)):
                 fd = fd.fileno()
             l = self._fd_to_handler[fd]
             # TODO: handle exceptions friendly
