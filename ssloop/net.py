@@ -95,7 +95,6 @@ class Socket(event.EventEmitter):
         assert self._state == STATE_INITIALIZED
         try:
             addrs = socket.getaddrinfo(address[0], address[1], 0, 0, socket.SOL_TCP)
-            print addrs
             # support both IPv4 and IPv6 addresses
             if addrs:
                 # TODO try every result
@@ -205,7 +204,6 @@ class Server(event.EventEmitter):
         self._socket = None
 
         addrs = socket.getaddrinfo(address[0], address[1], 0, 0, socket.SOL_TCP)
-        print addrs
         # support both IPv4 and IPv6 addresses
         if addrs:
             addr = addrs[0]
