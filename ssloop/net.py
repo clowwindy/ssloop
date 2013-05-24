@@ -23,6 +23,7 @@ class Socket(event.EventEmitter):
 
     def __init__(self, loop=None, sock=None):
         super(Socket, self).__init__()
+        self._socket = None
         self._loop = loop if loop is not None else instance()
         self._buffers = collections.deque()
         self._state = STATE_INITIALIZED
@@ -30,8 +31,8 @@ class Socket(event.EventEmitter):
         self._write_handler = None
 
         if sock is None:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-            self._socket.setblocking(False)
+            # create socket lazily
+            pass
         else:
             # initialize using existing socket
             self._socket = sock
@@ -63,7 +64,8 @@ class Socket(event.EventEmitter):
                 if self._write_handler:
                     self._loop.remove_handler(self._write_handler)
 
-            self._socket.close()
+            if self._socket is not None:
+                self._socket.close()
             self._state = STATE_CLOSED
             self.emit('close', self)
         else:
@@ -92,7 +94,18 @@ class Socket(event.EventEmitter):
         logging.debug('connect')
         assert self._state == STATE_INITIALIZED
         try:
-            self._socket.connect(address)
+            addrs = socket.getaddrinfo(address[0], address[1], 0, 0, socket.SOL_TCP)
+            print addrs
+            # support both IPv4 and IPv6 addresses
+            if addrs:
+                # TODO try every result
+                addr = addrs[0]
+                self._socket = socket.socket(addr[0], addr[1], addr[2])
+                self._socket.setblocking(False)
+                self._socket.connect(addr[4])
+            else:
+                self._error(Exception('can not resolve hostname %s' % address[0]))
+                return
         except socket.error as e:
             if e.args[0] not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
                 self._error(e)
@@ -189,10 +202,21 @@ class Server(event.EventEmitter):
         super(Server, self).__init__()
         self._address = address
         self._loop = loop if loop is not None else instance()
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        self._socket.setblocking(False)
-        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._socket.bind(address)
+        self._socket = None
+
+        addrs = socket.getaddrinfo(address[0], address[1], 0, 0, socket.SOL_TCP)
+        print addrs
+        # support both IPv4 and IPv6 addresses
+        if addrs:
+            addr = addrs[0]
+            self._socket = socket.socket(addr[0], addr[1], addr[2])
+            self._socket.setblocking(False)
+            self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self._socket.bind(addr[4])
+        else:
+            self._error(Exception('can not resolve hostname %s' % address[0]))
+            return
+
         self._state = STATE_INITIALIZED
 
     def __del__(self):
@@ -211,12 +235,17 @@ class Server(event.EventEmitter):
         sockobj = Socket(loop=self._loop, sock=conn)
         self.emit('connection', self, sockobj)
 
+    def _error(self, error):
+        self.emit('error', self, error)
+        self.close()
+
     def close(self):
         logging.debug('close server')
         if self._state in (STATE_INITIALIZED, STATE_LISTENING):
             if self._accept_handler:
                 self._loop.remove_handler(self._accept_handler)
-            self._socket.close()
+            if self._socket is not None:
+                self._socket.close()
             self._state = STATE_CLOSED
             self.emit('close', self)
         else:

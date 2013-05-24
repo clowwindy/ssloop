@@ -38,6 +38,6 @@ s.on('data', on_data)
 s.on('end', on_end)
 s.on('close', on_close)
 s.on('error', on_error)
-s.connect(('www.google.com', 80))
+s.connect(('www.googleasfasfasdfas.com', 80))
 
 loop.start()

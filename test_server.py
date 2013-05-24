@@ -35,7 +35,7 @@ def on_error(s, e):
     print e
 
 
-s = ssloop.Server(('127.0.0.1', 8080))
+s = ssloop.Server(('0.0.0.0', 8080))
 s.on('connection', on_connection)
 s.on('error', on_error)
 s.listen()
