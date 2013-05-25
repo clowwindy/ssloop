@@ -73,7 +73,8 @@ class Socket(event.EventEmitter):
                 self._loop.remove_handler(self._connect_handler)
             elif self._state == STATE_STREAMING or self._state == STATE_CLOSING:
                 if self._read_handler:
-                    self._loop.remove_handler(self._read_handler)
+                    if not self._paused:
+                        self._loop.remove_handler(self._read_handler)
                 if self._write_handler:
                     self._loop.remove_handler(self._write_handler)
 
