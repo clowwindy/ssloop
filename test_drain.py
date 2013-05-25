@@ -9,7 +9,8 @@ loop = ssloop.instance()
 
 def on_connect(s):
     print 'on_connect'
-    s.write('GET / HTTP/1.0\r\nHost: www.google.com\r\nConnection: Close\r\n\r\n')
+    s.write('POST / HTTP/1.0\r\nHost: www.google.com\r\nContent-Length: 1000000\r\nConnection: Close\r\n' + ' ' * 1000000)
+    # this is an invalid request
 
 
 def on_data(s, data):
@@ -27,6 +28,10 @@ def on_close(s):
     loop.stop()
 
 
+def on_drain(s):
+    print 'on_drain'
+
+
 def on_error(s, e):
     print 'on_error'
     print e
@@ -35,6 +40,7 @@ def on_error(s, e):
 s = ssloop.Socket()
 s.on('connect', on_connect)
 s.on('data', on_data)
+s.on('drain', on_drain)
 s.on('end', on_end)
 s.on('close', on_close)
 s.on('error', on_error)
