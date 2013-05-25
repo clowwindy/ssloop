@@ -54,6 +54,7 @@ class Socket(event.EventEmitter):
         if not self._paused:
             self._paused = True
             self._loop.remove_handler(self._read_handler)
+            self._read_handler = None
 
     def end(self):
         assert self._state in (STATE_INITIALIZED, STATE_CONNECTING, STATE_STREAMING)
@@ -71,12 +72,15 @@ class Socket(event.EventEmitter):
             # TODO remove handlers
             if self._state == STATE_CONNECTING:
                 self._loop.remove_handler(self._connect_handler)
+                self._connect_handler = None
             elif self._state == STATE_STREAMING or self._state == STATE_CLOSING:
                 if self._read_handler:
                     if not self._paused:
                         self._loop.remove_handler(self._read_handler)
+                        self._read_handler = None
                 if self._write_handler:
                     self._loop.remove_handler(self._write_handler)
+                    self._write_handler = None
 
             if self._socket is not None:
                 self._socket.close()
@@ -170,8 +174,9 @@ class Socket(event.EventEmitter):
                 self.emit('drain', self)
         else:
             logging.debug('removing write handler %s' % self._write_handler)
-            self._loop.remove_handler(self._write_handler)
-            self._write_handler = None
+            if self._write_handler:
+                self._loop.remove_handler(self._write_handler)
+                self._write_handler = None
             if self._state == STATE_CLOSING:
                 self.close()
             else:
