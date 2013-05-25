@@ -29,7 +29,7 @@ class Socket(event.EventEmitter):
         self._state = STATE_INITIALIZED
         self._connect_handler = None
         self._write_handler = None
-        self.paused = False
+        self._paused = False
 
         if sock is None:
             # create socket lazily
