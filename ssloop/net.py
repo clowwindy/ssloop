@@ -192,6 +192,7 @@ class Socket(event.EventEmitter):
                     return False
             except socket.error as e:
                 if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):
+                    buf.appendleft(data)
                     self._write_handler = self._loop.add_fd(self._socket, loop_.MODE_OUT, self._write_cb)
                     logging.debug(e)
                     return False
