@@ -2,6 +2,8 @@ super simple event loop
 ========================
 ssloop is a super simple eventloop
 
+    pip install ssloop
+
 example:
 
     import sys
