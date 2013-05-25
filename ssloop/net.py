@@ -46,13 +46,13 @@ class Socket(event.EventEmitter):
     def resume(self):
         assert self._state in (STATE_INITIALIZED, STATE_CONNECTING, STATE_STREAMING, STATE_CLOSING)
         if self._paused:
-            self._pause = False
+            self._paused = False
             self._read_handler = self._loop.add_fd(self._socket, loop_.MODE_IN, self._read_cb)
 
     def pause(self):
         assert self._state in (STATE_INITIALIZED, STATE_CONNECTING, STATE_STREAMING, STATE_CLOSING)
         if not self._paused:
-            self._pause = True
+            self._paused = True
             self._loop.remove_handler(self._read_handler)
 
     def end(self):
